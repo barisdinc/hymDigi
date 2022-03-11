@@ -1,0 +1,2 @@
+# hymDigi
+hymDIGI APRS Digipeater
