@@ -45,19 +45,19 @@ static Serial ser;
 
 #define ADC_CH 0
 
-static const char MYCALL[] = "TA7W";
+static const char MYCALL[] = "YM2KDZ";
 //static const char MYCALL[] = "YM5KRM";
 //static const char MYCALL[] = "YM7KA";
 //static const char MYCALL[] = "YM2KDZ";
 //static uint8_t MYCALL_SSID = 3;
-static uint8_t MYCALL_SSID = 2;
+static uint8_t MYCALL_SSID = 0;
 
 
-#define APRS_BEACON_MSG    "!4100.53N/02806.48E#PHG2520/>TA-APRS 017" //"!4100.53N/02806.48E#>TA-APRS 016" //TA7W 
+#define APRS_BEACON_MSG    "!4044.56N/03100.64E#PHG2820/DARD81 DUZCE DIGIPEATER ISTASYONU 750m" //"!4100.53N/02806.48E#>TA-APRS 016" //TA7W 
 #define APRS_BEACON_ENABLED  1
 //#define APRS_BEACON_MSG    "!4100.53N/02806.48E#>TA-APRS - AKU xx.x V - 014"
 //#define APRS_BEACON_MSG    "!3723.47N/03308.36E#AKRAD KARAMAN TEMSILCILIGI DIGIPEATER ISTASYONU 2250M"
-#define APRS_BEACON_INTERVAL 3*60
+#define APRS_BEACON_INTERVAL 1*60
 //#define APRS_BEACON_MSG    "!4049.41N/03106.43E#>TA-APRS DUZCE ATA-R"
 //#define APRS_BEACON_MSG    "!4100.19N/03942.85E#>TA-APRS TRABZON ATA-R"
 //#define APRS_BEACON_MSG    "!4044.56N/03100.65E#DUZCE DARD DIGI 600m"
@@ -65,18 +65,19 @@ static uint8_t MYCALL_SSID = 2;
 #define HYMTR_BEACON_ENABLED 1
 #define HYMTR_BEACON_MSG   ">hymDG ATA-R digipeater v1"
 //#define HYMTR_BEACON_MSG   ">145.650Mhz   TX-RX 88.5   -600khz (NARROW)"
-#define HYMTR_BEACON_INTERVAL 5*60
+#define HYMTR_BEACON_INTERVAL 2*60
 //#define TELEM_BEACON_MSG   "!4044.56N/03100.65E#AKU xx.xV"
 
-#define TELEM_BEACON_ENABLED 1
-#define TELEM_BEACON_MSG   "!4100.53N/02806.48E#AKU xx.xV" //TA7W
+#define TELEM_BEACON_ENABLED 0
+#define TELEM_BEACON_MSG   "!4044.56N/03100.64E#PHG2820/DARD81 DUZCE DIGIPEATER ISTASYONU 750m" //TA7W
+//#define TELEM_BEACON_MSG   "!4044.56N/03100.64E#AKU xx.xV" //TA7W
 //#define TELEM_BEACON_MSG   "!3723.47N/03308.36E#AKRAD KARAMAN TEMSILCILIGI DIGIPEATER ISTASYONU 2250m" //TA7W
-#define TELEM_BEACON_INTERVAL 7*60
+#define TELEM_BEACON_INTERVAL 3*60
 
-#define ADVERT_BEACON_ENABLED 1
+#define ADVERT_BEACON_ENABLED 0
 #define ADVERT_BEACON_MSG  ">TA-APRS 81 ILE APRS"
 //#define ADVERT_BEACON_MSG  "!3723.47N/03308.36E#AKRAD KARAMAN TEMSILCILIGI DIGIPEATER ISTASYONU 2250 m"
-#define ADVERT_BEACON_INTERVAL 8*60
+#define ADVERT_BEACON_INTERVAL 4*60
 
 
 #define APRS_BEACON_TIME (3 * 60)
@@ -207,9 +208,71 @@ static void init(void)
 
 #if 1
     ser_init(&ser, SER_UART0);
-    ser_setbaudrate(&ser, 115200L);
+    ser_setbaudrate(&ser, 9600L);//115200L);
 #endif
 }
+
+#define CMD_BUFFER_SIZE  100
+    char cmd_buffer[CMD_BUFFER_SIZE] = {0};
+
+/*
+void exec_data_parse(digi_config_t *digi_conf_str)
+{
+
+}
+*/
+
+void send_config(void)
+{
+    kfile_printf(&ser.fd,"\r\nSEND CONFIG\r\n");
+}
+
+void recv_config(void)
+{
+    kfile_printf(&ser.fd,"\r\nRECV CONFIG\r\n");    
+}
+
+void read_serial_data(void)
+{
+    static uint8_t buffer_position = 0;
+    while(!fifo_isempty(&ser.rxfifo))
+    {
+        char cmd_char;
+        kfile_read(&ser.fd,&cmd_char, 1);
+
+        cmd_buffer[buffer_position]=cmd_char;
+        if (buffer_position<CMD_BUFFER_SIZE-1) buffer_position++;
+        kfile_printf(&ser.fd,"%c",cmd_char);
+
+        if (cmd_char=='#')
+        {
+            //kfile_printf(&ser.fd,"\r\n>");
+            memset(cmd_buffer, 0, sizeof(cmd_buffer));
+            buffer_position = 0;
+        }
+        if (cmd_char=='$') 
+        {
+            if ((cmd_buffer[0]=='R') && (buffer_position== 2)) send_config();
+            if ((cmd_buffer[0]=='S') && (buffer_position==30)) recv_config();
+        }            
+
+
+        if (ser.rxfifo.tail==ser.rxfifo.end)
+        //if (fifo_isfull(&ser.rxfifo))
+        {
+            //kfile_printf(&ser.fd,"\r\nBUFFER FULL \r\n");
+            ser.rxfifo.head = ser.rxfifo.begin; //flush
+            ser.rxfifo.tail = ser.rxfifo.head; //flush
+
+        }
+
+    }
+}
+
+
+
+
+
 //static AX25Call path[] = AX25_PATH(AX25_CALL(CALL_BERTOS_APRS, 0),  AX25_CALL("", 0),AX25_CALL("wide2", 1));
 static AX25Call path[]     = AX25_PATH(AX25_CALL(CALL_BERTOS_APRS, 0),  AX25_CALL("", 0),AX25_CALL("wide2", 2));
 bool first_boot = true;
@@ -226,13 +289,19 @@ int main(void)
     memcpy(path[1].call, MYCALL, 6);
     path[1].ssid = MYCALL_SSID;
 
+    kfile_printf(&ser.fd, "hymDG Started\n\r");
+
     while (1)
     {
         ax25_poll(&ax25);
+        //kfile_printf(&ser.fd,"->%d %d %d %d \r\n",ser.rxfifo.begin, ser.rxfifo.end, ser.rxfifo.head, ser.rxfifo.tail);
+
+        if (!fifo_isempty(&ser.rxfifo)) read_serial_data();
+        
 #if 1
         if ((timer_clock() - start_aprs > ms_to_ticks(APRS_BEACON_INTERVAL * 1000L)) || (first_boot && (timer_clock() - start_aprs > ms_to_ticks(30 * 1000L))))
         {
-            kfile_printf(&ser.fd, "Beep %d\n", x++);
+            kfile_printf(&ser.fd, "Beep %d\r\n", x++);
             start_aprs = timer_clock();
             ax25_sendVia(&ax25, path, countof(path), APRS_BEACON_MSG, sizeof(APRS_BEACON_MSG)-1); 
                                                                                                 //-1 for direwolf warning :
@@ -243,7 +312,7 @@ int main(void)
 
         if ((HYMTR_BEACON_ENABLED==1) && (timer_clock() - start_hymtr) > ms_to_ticks(HYMTR_BEACON_INTERVAL * 1000L))
         {
-            kfile_printf(&ser.fd, "Beep %d\n", x++);
+            kfile_printf(&ser.fd, "Beep %d\r\n", x++);
             start_hymtr = timer_clock();
             ax25_sendVia(&ax25, path, countof(path), HYMTR_BEACON_MSG, sizeof(HYMTR_BEACON_MSG)-1); 
             first_boot = false;
@@ -251,7 +320,7 @@ int main(void)
 
         if ((TELEM_BEACON_ENABLED==1) && (timer_clock() - start_telem) > ms_to_ticks(TELEM_BEACON_INTERVAL * 1000L))
         {
-            kfile_printf(&ser.fd, "Beep %d\n", x++);
+            kfile_printf(&ser.fd, "Beep %d\r\n", x++);
             start_telem = timer_clock();
             ax25_sendVia(&ax25, path, countof(path), TELEM_BEACON_MSG, sizeof(TELEM_BEACON_MSG)-1); 
             first_boot = false;
@@ -259,7 +328,7 @@ int main(void)
 
         if ((ADVERT_BEACON_ENABLED==1) && (timer_clock() - start_advert) > ms_to_ticks(ADVERT_BEACON_INTERVAL * 1000L))
         {
-            kfile_printf(&ser.fd, "Beep %d\n", x++);
+            kfile_printf(&ser.fd, "Beep %d\r\n", x++);
             start_advert = timer_clock();
             ax25_sendVia(&ax25, path, countof(path), ADVERT_BEACON_MSG, sizeof(ADVERT_BEACON_MSG)-1); 
             first_boot = false;
