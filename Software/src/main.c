@@ -1,31 +1,3 @@
-
-/*
- * Bertos is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
- *
- * As a special exception, you may use this file as part of a free software
- * library without restriction.  Specifically, if other files instantiate
- * templates or use macros or inline functions from this file, or you compile
- * this file and link it with other files to produce an executable, this
- * file does not by itself cause the resulting executable to be covered by
- * the GNU General Public License.  This exception does not however
- * invalidate any other reasons why the executable file might be covered by
- * the GNU General Public License.
- *
- * Copyright 2010 Develer S.r.l. (http://www.develer.com/)
- *
- */
 #include <cpu/irq.h>
 #include <cfg/debug.h>
 
@@ -43,7 +15,45 @@ static Afsk afsk;
 static AX25Ctx ax25;
 static Serial ser;
 
+//#define EEMEM __attribute__((section(".eeprom")))
 #define ADC_CH 0
+
+uint8_t eeprom_read_byte (const uint8_t *__p) __ATTR_PURE__;
+void eeprom_write_byte (uint8_t *__p, uint8_t __value);
+
+
+struct Configuration
+{
+    char MYCALL[6];
+    uint8_t MYCALL_SSID;
+
+    uint16_t PREAMBLE;
+    uint8_t BEACON_MODE; //WIDE1-1, WIDE2-1
+
+    uint8_t  APRS_BEACON_ENABLED;
+    char     APRS_BEACON_MSG[80];
+    uint16_t APRS_BEACON_INTERVAL;
+
+    uint8_t  HYMTR_BEACON_ENABLED;
+    char     HYMTR_BEACON_MSG[80];
+    uint16_t HYMTR_BEACON_INTERVAL;
+
+    uint8_t  TELEM_BEACON_ENABLED;
+    char     TELEM_BEACON_MSG[80];
+    uint16_t TELEM_BEACON_INTERVAL;
+
+    uint8_t  ADVERT_BEACON_ENABLED;
+    char     ADVERT_BEACON_MSG[80];
+    uint16_t ADVERT_BEACON_INTERVAL;
+
+
+
+};
+
+
+
+
+
 
 static const char MYCALL[] = "YM2KDZ";
 //static const char MYCALL[] = "YM5KRM";
@@ -224,7 +234,17 @@ void exec_data_parse(digi_config_t *digi_conf_str)
 
 void send_config(void)
 {
+int jj = 0;
+    //eeprom_write_byte ((const uint8_t *)jj, 0x44);
     kfile_printf(&ser.fd,"\r\nSEND CONFIG\r\n");
+int ii=0;
+while (ii<256)
+{
+    kfile_printf(&ser.fd,"%02X ",eeprom_read_byte((const uint8_t *)ii));
+    ii++;
+}
+
+
 }
 
 void recv_config(void)
