@@ -9,7 +9,8 @@
 
 #include <stdio.h>
 #include <string.h>
-#include <avr/io.h>
+//#include <avr/io.h>
+#include  <algo/crc_ccitt.h>
 //export PATH=/home/baris/PROGRAMMING/arduino-1.8.13/hardware/tools/avr/bin/:$PATH
 static Afsk afsk; 
 static AX25Ctx ax25;
@@ -18,82 +19,158 @@ static Serial ser;
 //#define EEMEM __attribute__((section(".eeprom")))
 #define ADC_CH 0
 
-uint8_t eeprom_read_byte (const uint8_t *__p) __ATTR_PURE__;
-void eeprom_write_byte (uint8_t *__p, uint8_t __value);
+//EEPROM function without using header file
+//uint8_t eeprom_read_byte (const uint8_t *__p) __ATTR_PURE__;
+//void eeprom_write_byte (uint8_t *__p, uint8_t __value);
+void eeprom_read_block (void *__dst, const void *__src, size_t __n);
+void eeprom_write_block (const void *__src, void *__dst, size_t __n);
 
-
-struct Configuration
+typedef struct 
 {
-    char MYCALL[6];
-    uint8_t MYCALL_SSID;
+    char    EE_MYCALL[7];
+    uint8_t EE_MYCALL_SSID;
 
-    uint16_t PREAMBLE;
-    uint8_t BEACON_MODE; //WIDE1-1, WIDE2-1
+    uint16_t EE_PREAMBLE;
+    uint8_t  EE_BEACON_MODE; //WIDE1-1, WIDE2-1
 
-    uint8_t  APRS_BEACON_ENABLED;
-    char     APRS_BEACON_MSG[80];
-    uint16_t APRS_BEACON_INTERVAL;
+    uint8_t  EE_APRS_BEACON_ENABLED;
+    char     EE_APRS_BEACON_MSG[80];
+    uint16_t EE_APRS_BEACON_INTERVAL;
 
-    uint8_t  HYMTR_BEACON_ENABLED;
-    char     HYMTR_BEACON_MSG[80];
-    uint16_t HYMTR_BEACON_INTERVAL;
+    uint8_t  EE_HYMTR_BEACON_ENABLED;
+    char     EE_HYMTR_BEACON_MSG[80];
+    uint16_t EE_HYMTR_BEACON_INTERVAL;
 
-    uint8_t  TELEM_BEACON_ENABLED;
-    char     TELEM_BEACON_MSG[80];
-    uint16_t TELEM_BEACON_INTERVAL;
+    uint8_t  EE_TELEM_BEACON_ENABLED;
+    char     EE_TELEM_BEACON_MSG[80];
+    uint16_t EE_TELEM_BEACON_INTERVAL;
 
-    uint8_t  ADVERT_BEACON_ENABLED;
-    char     ADVERT_BEACON_MSG[80];
-    uint16_t ADVERT_BEACON_INTERVAL;
+    uint8_t  EE_ADVERT_BEACON_ENABLED;
+    char     EE_ADVERT_BEACON_MSG[80];
+    uint16_t EE_ADVERT_BEACON_INTERVAL;
 
+    uint16_t EE_CRC_VALUE;
+} Aprs_Configuration_t;
 
+Aprs_Configuration_t APRS_Configuration;
 
-};
-
-
-
-
-
-
-static const char MYCALL[] = "YM2KDZ";
+//static const char MYCALL[] = "YM2KDZ";
 //static const char MYCALL[] = "YM5KRM";
 //static const char MYCALL[] = "YM7KA";
 //static const char MYCALL[] = "YM2KDZ";
 //static uint8_t MYCALL_SSID = 3;
-static uint8_t MYCALL_SSID = 0;
+//static uint8_t MYCALL_SSID = 0;
 
 
-#define APRS_BEACON_MSG    "!4044.56N/03100.64E#PHG2820/DARD81 DUZCE DIGIPEATER ISTASYONU 750m" //"!4100.53N/02806.48E#>TA-APRS 016" //TA7W 
-#define APRS_BEACON_ENABLED  1
+//#define APRS_BEACON_MSG    "!4044.56N/03100.64E#PHG2820/DARD81 DUZCE DIGIPEATER ISTASYONU 750m" //"!4100.53N/02806.48E#>TA-APRS 016" //TA7W 
+//#define APRS_BEACON_ENABLED  1
 //#define APRS_BEACON_MSG    "!4100.53N/02806.48E#>TA-APRS - AKU xx.x V - 014"
 //#define APRS_BEACON_MSG    "!3723.47N/03308.36E#AKRAD KARAMAN TEMSILCILIGI DIGIPEATER ISTASYONU 2250M"
-#define APRS_BEACON_INTERVAL 1*60
+//#define APRS_BEACON_INTERVAL 1*60
 //#define APRS_BEACON_MSG    "!4049.41N/03106.43E#>TA-APRS DUZCE ATA-R"
 //#define APRS_BEACON_MSG    "!4100.19N/03942.85E#>TA-APRS TRABZON ATA-R"
 //#define APRS_BEACON_MSG    "!4044.56N/03100.65E#DUZCE DARD DIGI 600m"
 
-#define HYMTR_BEACON_ENABLED 1
-#define HYMTR_BEACON_MSG   ">hymDG ATA-R digipeater v1"
+//#define HYMTR_BEACON_ENABLED 1
+//#define HYMTR_BEACON_MSG   ">hymDG ATA-R digipeater v1"
 //#define HYMTR_BEACON_MSG   ">145.650Mhz   TX-RX 88.5   -600khz (NARROW)"
-#define HYMTR_BEACON_INTERVAL 2*60
+//#define HYMTR_BEACON_INTERVAL 2*60
 //#define TELEM_BEACON_MSG   "!4044.56N/03100.65E#AKU xx.xV"
 
-#define TELEM_BEACON_ENABLED 0
-#define TELEM_BEACON_MSG   "!4044.56N/03100.64E#PHG2820/DARD81 DUZCE DIGIPEATER ISTASYONU 750m" //TA7W
+//#define TELEM_BEACON_ENABLED 0
+//#define TELEM_BEACON_MSG   "!4044.56N/03100.64E#PHG2820/DARD81 DUZCE DIGIPEATER ISTASYONU 750m" //TA7W
 //#define TELEM_BEACON_MSG   "!4044.56N/03100.64E#AKU xx.xV" //TA7W
 //#define TELEM_BEACON_MSG   "!3723.47N/03308.36E#AKRAD KARAMAN TEMSILCILIGI DIGIPEATER ISTASYONU 2250m" //TA7W
-#define TELEM_BEACON_INTERVAL 3*60
+//#define TELEM_BEACON_INTERVAL 3*60
 
-#define ADVERT_BEACON_ENABLED 0
-#define ADVERT_BEACON_MSG  ">TA-APRS 81 ILE APRS"
+//#define ADVERT_BEACON_ENABLED 0
+//#define ADVERT_BEACON_MSG  ">TA-APRS 81 ILE APRS"
 //#define ADVERT_BEACON_MSG  "!3723.47N/03308.36E#AKRAD KARAMAN TEMSILCILIGI DIGIPEATER ISTASYONU 2250 m"
-#define ADVERT_BEACON_INTERVAL 4*60
+//#define ADVERT_BEACON_INTERVAL 4*60
 
 
-#define APRS_BEACON_TIME (3 * 60)
+//#define APRS_BEACON_TIME (3 * 60)
 //#define APRS_BEACON_TIME (60)
 
 #define CALL_BERTOS_APRS "apatar" //
+
+void eeprom_write_config(void)
+{
+    kfile_printf(&ser.fd, "Re-writing config...");
+    eeprom_write_block (&APRS_Configuration, 0, sizeof(APRS_Configuration)); //Write configuration to beginning of eeprom
+    timer_delay(100);
+    kfile_printf(&ser.fd, "done\r\n");
+}
+
+void eeprom_read_config(void)
+{
+    kfile_printf(&ser.fd, "\r\n");
+    kfile_printf(&ser.fd, "Reading Config...");
+    eeprom_read_block(&APRS_Configuration, 0, sizeof(APRS_Configuration)); //Read Configuration from beginnning of eeprom
+    timer_delay(100);
+    kfile_printf(&ser.fd, "done\r\n");
+   // if (APRS_Configuration.EE_CRC_VALUE!=crc_ccitt(0xFFFF, &APRS_Configuration, sizeof(APRS_Configuration)-2))
+    {
+        kfile_printf(&ser.fd, "CRC Failure\r\n");
+        //CRC failed, fill EEPROM with default values
+        strcpy(APRS_Configuration.EE_MYCALL, "YM6KGL\0");//"TA7W\0");
+        APRS_Configuration.EE_MYCALL_SSID = 0;
+
+        APRS_Configuration.EE_PREAMBLE = 300;
+        APRS_Configuration.EE_BEACON_MODE = 1;
+
+        APRS_Configuration.EE_APRS_BEACON_ENABLED = 1;
+        strcpy(APRS_Configuration.EE_APRS_BEACON_MSG, "!4103.15N/03343.00E#PHG2920/CANKIRI ILGAZ DAGI TRT ISTASYONU 2064m             \0");//"Konfigurayon yok/Configure\0");
+        APRS_Configuration.EE_APRS_BEACON_INTERVAL = 15*60;
+
+        APRS_Configuration.EE_HYMTR_BEACON_ENABLED = 1;
+        strcpy(APRS_Configuration.EE_HYMTR_BEACON_MSG, ">hymDG ATA-R digipeater v1.1a                                                \0");
+        APRS_Configuration.EE_HYMTR_BEACON_INTERVAL = 30*60;
+
+        APRS_Configuration.EE_TELEM_BEACON_ENABLED = 0;
+        strcpy(APRS_Configuration.EE_TELEM_BEACON_MSG,"50 saniye                                                                     \0");
+        APRS_Configuration.EE_TELEM_BEACON_INTERVAL = 50;
+
+        APRS_Configuration.EE_ADVERT_BEACON_ENABLED = 0;
+        strcpy(APRS_Configuration.EE_ADVERT_BEACON_MSG,"55 saniye                                                                    \0");
+        APRS_Configuration.EE_ADVERT_BEACON_INTERVAL = 55;
+
+        APRS_Configuration.EE_CRC_VALUE = crc_ccitt(0xFFFF, &APRS_Configuration, sizeof(APRS_Configuration)-2);
+        eeprom_write_config();
+    }
+}
+
+void print_digi_config(void)
+{
+    
+    //kfile_printf(&ser.fd, "\n\nhymDiGi Configuration\r\n");
+//    kfile_printf(&ser.fd, "%s-%d [P:%d] [M:%d]\r\n", APRS_Configuration.EE_MYCALL,                  
+//                                                            APRS_Configuration.EE_MYCALL_SSID,     
+//                                                            APRS_Configuration.EE_PREAMBLE,        
+//                                                            APRS_Configuration.EE_BEACON_MODE);
+    //kfile_printf(&ser.fd, "P:%d\r\n", APRS_Configuration.EE_PREAMBLE);
+    //kfile_printf(&ser.fd, "Mode : %d\r\n", APRS_Configuration.EE_BEACON_MODE);
+    //kfile_printf(&ser.fd, "APRS En : %c\r\n", APRS_Configuration.EE_APRS_BEACON_ENABLED==1?'Y':'N');
+
+    //kfile_printf(&ser.fd, "APRS Msg : %d\r\n", strlen(APRS_Configuration.EE_APRS_BEACON_MSG));
+    //kfile_printf(&ser.fd, "A : %s\r\n", APRS_Configuration.EE_APRS_BEACON_MSG);
+
+    //kfile_printf(&ser.fd, "APRS In : %ss\r\n", APRS_Configuration.EE_APRS_BEACON_INTERVAL);
+    //kfile_printf(&ser.fd, "HYMTR En : %c\r\n", APRS_Configuration.EE_HYMTR_BEACON_ENABLED==1?'Y':'N');
+    //kfile_printf(&ser.fd, "HYMTR Msg : %s\r\n", APRS_Configuration.EE_HYMTR_BEACON_MSG);
+    //kfile_printf(&ser.fd, "HYMTR In : %ss\r\n", APRS_Configuration.EE_HYMTR_BEACON_INTERVAL);
+    //kfile_printf(&ser.fd, "TELEM En : %c\r\n", APRS_Configuration.EE_TELEM_BEACON_ENABLED==1?'Y':'N');
+    //kfile_printf(&ser.fd, "TELEM Msg : %s\r\n", APRS_Configuration.EE_TELEM_BEACON_MSG);
+    //kfile_printf(&ser.fd, "TELEM In : %ss\r\n", APRS_Configuration.EE_TELEM_BEACON_INTERVAL);
+    //kfile_printf(&ser.fd, "ADVERT En : %c\r\n", APRS_Configuration.EE_ADVERT_BEACON_ENABLED==1?'Y':'N');
+    //kfile_printf(&ser.fd, "ADVERT Msg : %s\r\n", APRS_Configuration.EE_ADVERT_BEACON_MSG);
+    //kfile_printf(&ser.fd, "ADVERT In : %ss\r\n", APRS_Configuration.EE_ADVERT_BEACON_INTERVAL);
+
+
+
+
+}
+
 
 
 static void message_callback(struct AX25Msg *msg)
@@ -138,7 +215,7 @@ static void message_callback(struct AX25Msg *msg)
             if (!tmp_path[i].h_bit) {
                 AX25Call* c = &tmp_path[i];
 
-                if ((memcmp(tmp_path[i].call, MYCALL, 6) == 0) && (tmp_path[i].ssid == MYCALL_SSID))
+                if ((memcmp(tmp_path[i].call, APRS_Configuration.EE_MYCALL, 6) == 0) && (tmp_path[i].ssid == APRS_Configuration.EE_MYCALL_SSID))
                 {
                     repeat = 0;
                     break;
@@ -172,8 +249,8 @@ static void message_callback(struct AX25Msg *msg)
                             for (k = tmp_path_size; k > i; --k) {
                                 tmp_path[k] = tmp_path[k - 1];
                             }
-                            memcpy(tmp_path[i].call, MYCALL, 6);
-                            tmp_path[i].ssid = MYCALL_SSID;
+                            memcpy(tmp_path[i].call, APRS_Configuration.EE_MYCALL, 6);
+                            tmp_path[i].ssid = APRS_Configuration.EE_MYCALL_SSID;
                             tmp_path[i].h_bit = 1;
                             tmp_path_size++;
                             i++;
@@ -184,7 +261,7 @@ static void message_callback(struct AX25Msg *msg)
                 }
             } else
 						{
-                if ((memcmp(tmp_path[i].call, MYCALL, 6) == 0) && (tmp_path[i].ssid == MYCALL_SSID)) {
+                if ((memcmp(tmp_path[i].call, APRS_Configuration.EE_MYCALL, 6) == 0) && (tmp_path[i].ssid == APRS_Configuration.EE_MYCALL_SSID)) {
                     repeat = 1;
                     tmp_path[i].h_bit = 1;
                     break;
@@ -192,7 +269,7 @@ static void message_callback(struct AX25Msg *msg)
             }
         }
 
-        if ((memcmp(tmp_path[1].call, MYCALL, 6) == 0) && (tmp_path[i].ssid == MYCALL_SSID))
+        if ((memcmp(tmp_path[1].call, APRS_Configuration.EE_MYCALL, 6) == 0) && (tmp_path[i].ssid == APRS_Configuration.EE_MYCALL_SSID))
 				{
             repeat = 0;
         }
@@ -213,13 +290,15 @@ static void init(void)
     kdbg_init();
     timer_init();
 
+    ser_init(&ser, SER_UART0);
+    ser_setbaudrate(&ser, 9600L);//115200L);
+
+    eeprom_read_config();
+    //print_digi_config();
+  
     afsk_init(&afsk, ADC_CH, 0);
     ax25_init(&ax25, &afsk.fd, message_callback);
 
-#if 1
-    ser_init(&ser, SER_UART0);
-    ser_setbaudrate(&ser, 9600L);//115200L);
-#endif
 }
 
 #define CMD_BUFFER_SIZE  100
@@ -234,15 +313,16 @@ void exec_data_parse(digi_config_t *digi_conf_str)
 
 void send_config(void)
 {
-int jj = 0;
+//int jj = 0;
     //eeprom_write_byte ((const uint8_t *)jj, 0x44);
     kfile_printf(&ser.fd,"\r\nSEND CONFIG\r\n");
-int ii=0;
-while (ii<256)
-{
-    kfile_printf(&ser.fd,"%02X ",eeprom_read_byte((const uint8_t *)ii));
-    ii++;
-}
+
+//int ii=0;
+//while (ii<256)
+//{
+    //kfile_printf(&ser.fd,"%02X ",eeprom_read_byte((const uint8_t *)ii));
+    //ii++;
+//}
 
 
 }
@@ -273,7 +353,8 @@ void read_serial_data(void)
         if (cmd_char=='$') 
         {
             if ((cmd_buffer[0]=='R') && (buffer_position== 2)) send_config();
-            if ((cmd_buffer[0]=='S') && (buffer_position==30)) recv_config();
+            if ((cmd_buffer[0]=='S') && (buffer_position== 3)) recv_config();
+            if ((cmd_buffer[0]=='P') && (buffer_position== 2)) print_digi_config();
         }            
 
 
@@ -306,8 +387,8 @@ int main(void)
     ticks_t start_advert = timer_clock();
 
     unsigned char x = 0;
-    memcpy(path[1].call, MYCALL, 6);
-    path[1].ssid = MYCALL_SSID;
+    memcpy(path[1].call, APRS_Configuration.EE_MYCALL, 6);
+    path[1].ssid = APRS_Configuration.EE_MYCALL_SSID;
 
     kfile_printf(&ser.fd, "hymDG Started\n\r");
 
@@ -319,38 +400,39 @@ int main(void)
         if (!fifo_isempty(&ser.rxfifo)) read_serial_data();
         
 #if 1
-        if ((timer_clock() - start_aprs > ms_to_ticks(APRS_BEACON_INTERVAL * 1000L)) || (first_boot && (timer_clock() - start_aprs > ms_to_ticks(30 * 1000L))))
+        if ((timer_clock() - start_aprs > ms_to_ticks(APRS_Configuration.EE_APRS_BEACON_INTERVAL * 1000L)) || (first_boot && (timer_clock() - start_aprs > ms_to_ticks(30 * 1000L))))
         {
             kfile_printf(&ser.fd, "Beep %d\r\n", x++);
             start_aprs = timer_clock();
-            ax25_sendVia(&ax25, path, countof(path), APRS_BEACON_MSG, sizeof(APRS_BEACON_MSG)-1); 
+            ax25_sendVia(&ax25, path, countof(path), APRS_Configuration.EE_APRS_BEACON_MSG, strlen(APRS_Configuration.EE_APRS_BEACON_MSG)-1); 
+            //ax25_sendVia(&ax25, path, countof(path), APRS_Configuration.EE_APRS_BEACON_MSG, sizeof(APRS_Configuration.EE_APRS_BEACON_MSG)-1); 
                                                                                                 //-1 for direwolf warning :
                                                                                                 //'nul' character found in Information part.  This should never happen with APRS. 
                                                                                                 //If this is meant to be APRS, TA7W-3 is transmitting with defective software.
             first_boot = false;
         }
 
-        if ((HYMTR_BEACON_ENABLED==1) && (timer_clock() - start_hymtr) > ms_to_ticks(HYMTR_BEACON_INTERVAL * 1000L))
+        if ((APRS_Configuration.EE_HYMTR_BEACON_ENABLED==1) && (timer_clock() - start_hymtr) > ms_to_ticks(APRS_Configuration.EE_HYMTR_BEACON_INTERVAL * 1000L))
         {
             kfile_printf(&ser.fd, "Beep %d\r\n", x++);
             start_hymtr = timer_clock();
-            ax25_sendVia(&ax25, path, countof(path), HYMTR_BEACON_MSG, sizeof(HYMTR_BEACON_MSG)-1); 
+            ax25_sendVia(&ax25, path, countof(path), APRS_Configuration.EE_HYMTR_BEACON_MSG, strlen(APRS_Configuration.EE_HYMTR_BEACON_MSG)-1); 
             first_boot = false;
         }
 
-        if ((TELEM_BEACON_ENABLED==1) && (timer_clock() - start_telem) > ms_to_ticks(TELEM_BEACON_INTERVAL * 1000L))
+        if ((APRS_Configuration.EE_TELEM_BEACON_ENABLED==1) && (timer_clock() - start_telem) > ms_to_ticks(APRS_Configuration.EE_TELEM_BEACON_INTERVAL * 1000L))
         {
             kfile_printf(&ser.fd, "Beep %d\r\n", x++);
             start_telem = timer_clock();
-            ax25_sendVia(&ax25, path, countof(path), TELEM_BEACON_MSG, sizeof(TELEM_BEACON_MSG)-1); 
+            ax25_sendVia(&ax25, path, countof(path), APRS_Configuration.EE_TELEM_BEACON_MSG, strlen(APRS_Configuration.EE_TELEM_BEACON_MSG)-1); 
             first_boot = false;
         }
 
-        if ((ADVERT_BEACON_ENABLED==1) && (timer_clock() - start_advert) > ms_to_ticks(ADVERT_BEACON_INTERVAL * 1000L))
+        if ((APRS_Configuration.EE_ADVERT_BEACON_ENABLED==1) && (timer_clock() - start_advert) > ms_to_ticks(APRS_Configuration.EE_ADVERT_BEACON_INTERVAL * 1000L))
         {
             kfile_printf(&ser.fd, "Beep %d\r\n", x++);
             start_advert = timer_clock();
-            ax25_sendVia(&ax25, path, countof(path), ADVERT_BEACON_MSG, sizeof(ADVERT_BEACON_MSG)-1); 
+            ax25_sendVia(&ax25, path, countof(path), APRS_Configuration.EE_ADVERT_BEACON_MSG, strlen(APRS_Configuration.EE_ADVERT_BEACON_MSG)-1); 
             first_boot = false;
         }
 
