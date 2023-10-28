@@ -99,7 +99,7 @@
  * $WIZ$ type = "int"
  * $WIZ$ min = 1
  */
-#define CONFIG_AFSK_PREAMBLE_LEN 300UL
+#define CONFIG_AFSK_PREAMBLE_LEN 150UL
 
 
 
