@@ -45,8 +45,8 @@ static Serial ser;
 
 #define ADC_CH 0
 
-//static const char MYCALL[] = "TA7W";
-static const char MYCALL[] = "YM2KBO";
+static const char MYCALL[] = "TA7W";
+//static const char MYCALL[] = "YM2KBO";
 //static const char MYCALL[] = "YM3KD";
 //static const char MYCALL[] = "YM2KRK";
 //static const char MYCALL[] = "YM1KLB";
@@ -55,11 +55,11 @@ static const char MYCALL[] = "YM2KBO";
 //static const char MYCALL[] = "YM7KA";
 //static const char MYCALL[] = "YM2KDZ";
 //static uint8_t MYCALL_SSID = 3;
-static uint8_t MYCALL_SSID = 0;
+static uint8_t MYCALL_SSID = 2;
 
 
-//#define APRS_BEACON_MSG    "!4100.53N/02806.48E#>TA-APRS 021" //TA7W 
-#define APRS_BEACON_MSG        "!3955.48N/02955.32E#PHG2820/BILECIK CAMYAYLA DIGIPEATER IST.1370m" //YM2KBO
+#define APRS_BEACON_MSG    "!4100.53N/02806.48E#>TA-APRS 021" //TA7W 
+//#define APRS_BEACON_MSG        "!3955.48N/02955.32E#PHG2820/BILECIK CAMYAYLA DIGIPEATER IST.1370m" //YM2KBO
 //#define APRS_BEACON_MSG      "!3758.78N/03223.02E#PHG3930/KONYA AGLAYANCAL DIGIPEATER IST.1940m" //"!4036.54N/03337.01E#PHG3820/CANKIRI KALE IST.900M"
 //#define APRS_BEACON_MSG      "!4101.49N/03242.52E#PHG2920TRAC KARABUK SIVRITEPE DIGIPEATER ISTASYONU 1540m" //"!4036.54N/03337.01E#PHG3820/CANKIRI KALE IST.900M"
 //#define APRS_BEACON_MSG      "!4124.39N/02719.69E#PHG3520/TRAC LULEBURGAZ DIGIPEATER ISTASYONU 150m"
@@ -101,6 +101,60 @@ static uint8_t MYCALL_SSID = 0;
 #define CALL_BERTOS_APRS "apatar" //
 
 
+#define BLACKLISTED_CALLS_SIZE 3
+AX25Call blacklisted_calls[] =  {AX25_CALL("TA1DS",10), AX25_CALL("TA3EC",0), AX25_CALL("TA6AEU",5)} ;
+#define BLACKLISTED_SSIDS_SIZE 2
+uint8_t blacklisted_ssids[] = { 7, 8};
+#define DENY_OBJECTS 1
+#define DENY_TELEMETRY 1
+/*
+ * This function checks contents of AX25Msg and decides repeating or denying
+ * We check the following :
+ * - Source Address
+ * - SSIDs
+ * - Positions/Objects/Itens/Telemetry/Messages/Others
+ * 
+ */
+//TODO: This function can be moved to a library
+bool blacklist_check(struct AX25Msg *msg)
+{
+    //kfile_printf(&ser.fd, "\r\nfundtion: blacklist\r\n");
+    //kfile_printf(&ser.fd, "\r\nChecking Blasklist SRC[%s-%d] \r\n", msg->src.call, msg->src.ssid);
+    for (uint8_t cnt=0;cnt<BLACKLISTED_CALLS_SIZE;cnt++)
+    {
+        //kfile_printf(&ser.fd, "\r\nSCompared to  SRC[%s-%d] (%d) \r\n", blacklisted_calls[cnt].call, blacklisted_calls[cnt].ssid, memcmp(&(msg->src.call), &(blacklisted_calls[cnt].call),sizeof(blacklisted_calls[cnt].call)));
+        if(0==memcmp(&(msg->src.call), &(blacklisted_calls[cnt].call),sizeof(blacklisted_calls[cnt].call)) && (msg->src.ssid==blacklisted_calls[cnt].ssid))
+            {
+                    kfile_printf(&ser.fd, "\r\nSRC[%s-%d] : CALL BLACKLISTED, DENIED\r\n", msg->src.call, msg->src.ssid);
+                    return true;
+            }
+    }
+    for (uint8_t cnt=0;cnt<BLACKLISTED_SSIDS_SIZE;cnt++)
+    {
+        //kfile_printf(&ser.fd, "\r\nSCompared SSIDs[%d-%d] (%d) \r\n", blacklisted_ssids[cnt], msg->src.ssid, (msg->src.ssid == blacklisted_ssids[cnt]));
+        if(msg->src.ssid == blacklisted_ssids[cnt])
+            {
+                    kfile_printf(&ser.fd, "\r\nSRC[%s-%d] : SSID BLACKLISTED, DENIED\r\n", msg->src.call, msg->src.ssid);
+                    return true;
+            }
+    }
+    if (DENY_OBJECTS && (msg->info[0]==';'))
+    {
+                    kfile_printf(&ser.fd, "\r\nSRC[%s-%d] : OBJECTS BLACKLISTED, DENIED\r\n", msg->src.call, msg->src.ssid);
+                    return true;        
+    }
+    if (DENY_TELEMETRY && (msg->info[0]=='T'))
+    {
+                    kfile_printf(&ser.fd, "\r\nSRC[%s-%d] : TELEMETRY BLACKLISTED, DENIED\r\n", msg->src.call, msg->src.ssid);
+                    return true;        
+    }
+
+    return false;
+}
+
+
+
+
 static void message_callback(struct AX25Msg *msg)
 {
     if (PORTB & 0x08) 
@@ -116,7 +170,7 @@ static void message_callback(struct AX25Msg *msg)
 
 
 #if 1
-    kfile_printf(&ser.fd, "\n\nSRC[%.6s-%d], DST[%.6s-%d]\r\n", msg->src.call, msg->src.ssid, msg->dst.call, msg->dst.ssid);
+    kfile_printf(&ser.fd, "\r\nSRC[%.6s-%d], DST[%.6s-%d]\r\n", msg->src.call, msg->src.ssid, msg->dst.call, msg->dst.ssid);
 
     for (i = 0; i < msg->rpt_cnt; i++)
         kfile_printf(&ser.fd, "via: [%.6s-%d%s]\r\n", msg->rpt_lst[i].call, msg->rpt_lst[i].ssid, msg->rpt_lst[i].h_bit?"*":"");
@@ -139,76 +193,79 @@ static void message_callback(struct AX25Msg *msg)
             tmp_path[i + 2] = msg->rpt_lst[i];
         tmp_path_size = 2 + msg->rpt_cnt;
 
-        for (i = 2; i < tmp_path_size; ++i) {
-            if (!tmp_path[i].h_bit) {
-                AX25Call* c = &tmp_path[i];
+        if (!blacklist_check(msg))
+        {
+            for (i = 2; i < tmp_path_size; ++i) {
+                if (!tmp_path[i].h_bit) {
+                    AX25Call* c = &tmp_path[i];
 
-                if ((memcmp(tmp_path[i].call, MYCALL, 6) == 0) && (tmp_path[i].ssid == MYCALL_SSID))
-                {
-                    repeat = 0;
-                    break;
-                }
+                    if ((memcmp(tmp_path[i].call, MYCALL, 6) == 0) && (tmp_path[i].ssid == MYCALL_SSID))
+                    {
+                        repeat = 0;
+                        break;
+                    }
 
-                for (k=0; relay_calls[k]; ++k)
-                {
-                    if (memcmp(relay_calls[k], c->call, 6) == 0) {
+                    for (k=0; relay_calls[k]; ++k)
+                    {
+                        if (memcmp(relay_calls[k], c->call, 6) == 0) {
+                            repeat = 1;
+                            tmp_path[i].h_bit = 1;
+                            break;
+                        }
+                    }
+
+                    if (repeat)
+                        break;
+
+                    if (tmp_path[i].ssid > 0)
+                    {
+                        is_wide = memcmp("WIDE", c->call, 4) == 0;
+                        //is_trace = memcmp("TRACE", c->call, 5) == 0;
+                        if (is_wide)
+                        {
+                            repeat = 1;
+                            tmp_path[i].ssid--;
+                            if (tmp_path[i].ssid == 0)
+                                tmp_path[i].h_bit = 1;
+    //                        if ((is_trace) || (is_wide) && (tmp_path_size < (AX25_MAX_RPT + 2)))
+                            if ((is_wide) && (tmp_path_size < (AX25_MAX_RPT + 2)))
+                            {
+                                for (k = tmp_path_size; k > i; --k) {
+                                    tmp_path[k] = tmp_path[k - 1];
+                                }
+                                memcpy(tmp_path[i].call, MYCALL, 6);
+                                tmp_path[i].ssid = MYCALL_SSID;
+                                tmp_path[i].h_bit = 1;
+                                tmp_path_size++;
+                                i++;
+                            }
+
+                            break;
+                        }
+                    }
+                } else
+                            {
+                    if ((memcmp(tmp_path[i].call, MYCALL, 6) == 0) && (tmp_path[i].ssid == MYCALL_SSID)) {
                         repeat = 1;
                         tmp_path[i].h_bit = 1;
                         break;
                     }
                 }
-
-                if (repeat)
-                    break;
-
-                if (tmp_path[i].ssid > 0)
-                {
-                    is_wide = memcmp("WIDE", c->call, 4) == 0;
-                    //is_trace = memcmp("TRACE", c->call, 5) == 0;
-                    if (is_wide)
-                    {
-                        repeat = 1;
-                        tmp_path[i].ssid--;
-                        if (tmp_path[i].ssid == 0)
-                            tmp_path[i].h_bit = 1;
-//                        if ((is_trace) || (is_wide) && (tmp_path_size < (AX25_MAX_RPT + 2)))
-                        if ((is_wide) && (tmp_path_size < (AX25_MAX_RPT + 2)))
-						{
-                            for (k = tmp_path_size; k > i; --k) {
-                                tmp_path[k] = tmp_path[k - 1];
-                            }
-                            memcpy(tmp_path[i].call, MYCALL, 6);
-                            tmp_path[i].ssid = MYCALL_SSID;
-                            tmp_path[i].h_bit = 1;
-                            tmp_path_size++;
-                            i++;
-                        }
-
-                        break;
-                    }
-                }
-            } else
-						{
-                if ((memcmp(tmp_path[i].call, MYCALL, 6) == 0) && (tmp_path[i].ssid == MYCALL_SSID)) {
-                    repeat = 1;
-                    tmp_path[i].h_bit = 1;
-                    break;
-                }
             }
-        }
 
-        if ((memcmp(tmp_path[1].call, MYCALL, 6) == 0) && (tmp_path[i].ssid == MYCALL_SSID))
-				{
-            repeat = 0;
-        }
+            if ((memcmp(tmp_path[1].call, MYCALL, 6) == 0) && (tmp_path[i].ssid == MYCALL_SSID))
+                    {
+                repeat = 0;
+            }
 
-        if (repeat && is_wide)
-				{
-            ax25_sendVia(&ax25, tmp_path, tmp_path_size, msg->info, msg->len);
-            kfile_print(&ser.fd, "REPEATED\n");
-        } else {
-            kfile_print(&ser.fd, "NOT REPEATED\n");
-        }
+            if (repeat && is_wide)
+                    {
+                ax25_sendVia(&ax25, tmp_path, tmp_path_size, msg->info, msg->len);
+                kfile_print(&ser.fd, "REPEATED\n");
+            } else {
+                kfile_print(&ser.fd, "NOT REPEATED\n");
+            }
+        } //blacklist check
     }
 }
 
